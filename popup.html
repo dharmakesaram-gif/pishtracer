@@ -1,16 +1,302 @@
 <!DOCTYPE html>
-<html><head><meta charset="UTF-8">
-<style>
-body{width:230px;font-family:-apple-system,Arial,sans-serif;background:#10151c;color:#e7ecf2;padding:14px;margin:0}
-h1{font-size:14px;margin:0 0 10px}
-.row{display:flex;justify-content:space-between;padding:6px 0;font-size:13px;border-bottom:1px solid #2a3644}
-.toggle{display:flex;align-items:center;justify-content:space-between;margin-top:12px}
-button{background:#1c2531;color:#e7ecf2;border:1px solid #2a3644;border-radius:5px;padding:6px 10px;cursor:pointer;font-size:12px}
-</style></head>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #090d16;
+      --card: rgba(255, 255, 255, 0.04);
+      --border: rgba(255, 255, 255, 0.08);
+      --accent: #38bdf8;
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+      --danger: #ef4444;
+      --success: #10b981;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      width: 340px;
+      font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      background-image: radial-gradient(circle at 100% 0%, rgba(56, 189, 248, 0.12) 0%, transparent 50%);
+      color: var(--text);
+      padding: 16px;
+      user-select: none;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 14px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+    }
+
+    .logo-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #0284c7, #6366f1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 12px rgba(56, 189, 248, 0.35);
+    }
+
+    .logo-icon svg { width: 16px; height: 16px; fill: white; }
+
+    .brand-title {
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: -0.01em;
+    }
+
+    .version-tag {
+      font-size: 9px;
+      font-family: 'JetBrains Mono', monospace;
+      padding: 1px 6px;
+      border-radius: 9999px;
+      background: rgba(56, 189, 248, 0.15);
+      color: var(--accent);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+    }
+
+    /* Status Pill */
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 10px;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 9999px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+    }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--text-muted);
+    }
+
+    .status-dot.online { background: var(--success); box-shadow: 0 0 8px var(--success); }
+    .status-dot.offline { background: var(--danger); }
+
+    /* Counter Grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .stat-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .stat-card::after {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; width: 3px; height: 100%;
+    }
+
+    .stat-card.scanned::after { background: var(--accent); }
+    .stat-card.flagged::after { background: var(--danger); }
+
+    .stat-label {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-bottom: 2px;
+    }
+
+    .stat-number {
+      font-size: 22px;
+      font-weight: 800;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .stat-card.scanned .stat-number { color: #e2e8f0; }
+    .stat-card.flagged .stat-number { color: #f87171; }
+
+    /* Controls */
+    .control-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      margin-bottom: 10px;
+    }
+
+    .control-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    /* Switch */
+    .switch {
+      position: relative;
+      width: 36px;
+      height: 20px;
+    }
+
+    .switch input { opacity: 0; width: 0; height: 0; }
+
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      inset: 0;
+      background: #334155;
+      border-radius: 20px;
+      transition: 0.25s;
+    }
+
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 14px;
+      width: 14px;
+      left: 3px;
+      bottom: 3px;
+      background: white;
+      border-radius: 50%;
+      transition: 0.25s;
+    }
+
+    input:checked + .slider { background: #0284c7; }
+    input:checked + .slider:before { transform: translateX(16px); }
+
+    /* Action Buttons */
+    .btn {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px;
+      border-radius: 10px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      border: none;
+      margin-bottom: 8px;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #0284c7, #4f46e5);
+      color: white;
+      box-shadow: 0 4px 15px rgba(2, 132, 199, 0.3);
+    }
+
+    .btn-primary:hover {
+      box-shadow: 0 6px 20px rgba(2, 132, 199, 0.45);
+      transform: translateY(-1px);
+    }
+
+    .btn-ghost {
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+    }
+
+    .btn-ghost:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text);
+    }
+
+    .footer-note {
+      font-size: 9.5px;
+      color: var(--text-muted);
+      text-align: center;
+      margin-top: 6px;
+    }
+  </style>
+</head>
 <body>
-  <h1>PhishTrace</h1>
-  <div class="row"><span>Emails scanned</span><b id="scanned">0</b></div>
-  <div class="row"><span>Flagged suspicious</span><b id="flagged">0</b></div>
-  <div class="toggle"><span>Auto-scan Gmail</span><button id="toggle">On</button></div>
+  <div class="header">
+    <div class="brand">
+      <div class="logo-icon">
+        <svg viewBox="0 0 24 24"><path d="M12 2L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-3zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/></svg>
+      </div>
+      <div>
+        <div style="display: flex; align-items: center; gap: 5px;">
+          <span class="brand-title">PhishTrace</span>
+          <span class="version-tag">AI v2</span>
+        </div>
+      </div>
+    </div>
+    
+    <div class="status-badge" id="statusBadge">
+      <span class="status-dot" id="statusDot"></span>
+      <span id="statusText">Syncing...</span>
+    </div>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card scanned">
+      <span class="stat-label">Inspected</span>
+      <span class="stat-number" id="scanned">0</span>
+    </div>
+    <div class="stat-card flagged">
+      <span class="stat-label">Threats</span>
+      <span class="stat-number" id="flagged">0</span>
+    </div>
+  </div>
+
+  <div class="control-row">
+    <div class="control-label">
+      <span>🛡️ Real-Time Gmail Shield</span>
+    </div>
+    <label class="switch">
+      <input type="checkbox" id="toggle" checked>
+      <span class="slider"></span>
+    </label>
+  </div>
+
+  <button class="btn btn-primary" id="openDashboard">
+    <span>📊 Launch Threat Intelligence SOC</span>
+  </button>
+
+  <button class="btn btn-ghost" id="resetStats">
+    <span>🔄 Reset Session Telemetry</span>
+  </button>
+
+  <div class="footer-note">
+    SIH 26106 Enterprise Email Defense Engine
+  </div>
+
   <script src="popup.js"></script>
-</body></html>
+</body>
+</html>

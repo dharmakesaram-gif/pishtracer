@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "PhishTrace — Automatic Email Threat Scanner",
-  "version": "1.0.0",
-  "description": "Automatically scans every email you open in Gmail for phishing, spoofing and BEC indicators, with deep forensic header tracing on 'Show original' pages.",
-  "permissions": ["storage"],
-  "host_permissions": ["https://mail.google.com/*"],
+  "name": "PhishTrace — AI Email Threat Scanner",
+  "version": "2.0.0",
+  "description": "AI-powered email threat detection with geolocation tracking, forensic analysis, and campaign intelligence. Scans every email in Gmail for phishing, spoofing, and BEC indicators.",
+  "permissions": ["storage", "tabs"],
+  "host_permissions": ["https://mail.google.com/*", "http://localhost:8000/*"],
   "background": { "service_worker": "background.js" },
   "action": { "default_popup": "popup.html", "default_title": "PhishTrace" },
   "content_scripts": [

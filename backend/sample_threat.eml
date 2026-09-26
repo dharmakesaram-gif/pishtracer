@@ -1,0 +1,29 @@
+From: Microsoft Security Team <security-alert@msoft-verify-portal.top>
+To: target-analyst@enterprise.com
+Subject: CRITICAL: Immediate action required on Microsoft 365 cloud credentials
+Date: Sat, 26 Sep 2026 23:15:00 +0530
+Message-ID: <009876xyz@msoft-verify-portal.top>
+Authentication-Results: spf=fail; dkim=fail; dmarc=fail
+Received: from 185.220.101.1 by mx.google.com
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----=_PhishTrace_Part_Boundary_001"
+
+------=_PhishTrace_Part_Boundary_001
+Content-Type: text/plain; charset=UTF-8
+
+Dear Customer,
+
+Your enterprise Microsoft cloud license was reported for policy violation from an unauthorized IP in Russia.
+Immediate wire transfer of $250 penalty or re-authentication of your credentials is required within 4 hours.
+
+Verify account access immediately: http://192.168.1.1/ms-verify or open the attached audit form.
+
+------=_PhishTrace_Part_Boundary_001
+Content-Type: application/octet-stream; name="Corporate_Compliance_Audit.pdf.exe"
+Content-Disposition: attachment; filename="Corporate_Compliance_Audit.pdf.exe"
+Content-Transfer-Encoding: base64
+
+TVqQAAMAAAAEAAAA//8AALgAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAA4AAAAA4fug4AtAnNIbgBTM0hVGhpcyBwcm9ncmFtIGNhbm5vdCBiZSBydW4gaW4gRE9TIG1v
+ZGUuDQ0KJAAAAAAAAAA=
+------=_PhishTrace_Part_Boundary_001--

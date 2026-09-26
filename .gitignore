@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.env
+.venv/
+venv/
+ENV/
+*.db
+*.sqlite3
+.pytest_cache/
+.coverage
+htmlcov/
+*.log
+.DS_Store
+test_report.pdf
+backend/test_eml_soar.py

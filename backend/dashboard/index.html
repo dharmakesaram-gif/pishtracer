@@ -1,0 +1,1474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PhishTrace // SOC Forensic Intelligence & Threat Radar</title>
+    <!-- Leaflet & Chart.js -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --bg-base: #060913;
+            --bg-surface: #0c1222;
+            --bg-card: rgba(15, 23, 42, 0.75);
+            --bg-card-hover: rgba(30, 41, 59, 0.85);
+            --border: rgba(255, 255, 255, 0.08);
+            --border-highlight: rgba(59, 130, 246, 0.35);
+            
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --text-dim: #64748b;
+
+            --cyber-blue: #38bdf8;
+            --cyber-cyan: #06b6d4;
+            --cyber-indigo: #6366f1;
+            
+            --risk-low: #10b981;
+            --risk-med: #f59e0b;
+            --risk-high: #f97316;
+            --risk-crit: #ef4444;
+
+            --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body {
+            background-color: var(--bg-base);
+            background-image: 
+                radial-gradient(circle at 15% 15%, rgba(56, 189, 248, 0.08) 0%, transparent 40%),
+                radial-gradient(circle at 85% 85%, rgba(99, 102, 241, 0.08) 0%, transparent 40%),
+                linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+            background-size: 100% 100%, 100% 100%, 32px 32px, 32px 32px;
+            color: var(--text-main);
+            font-family: var(--font-sans);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+
+        /* Top Bar */
+        header {
+            background: rgba(12, 18, 34, 0.85);
+            backdrop-filter: blur(16px);
+            border-bottom: 1px solid var(--border);
+            padding: 0.85rem 2rem;
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .brand-container {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .brand-logo {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #0284c7, #6366f1);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 0 20px rgba(56, 189, 248, 0.4);
+        }
+
+        .brand-logo svg { width: 22px; height: 22px; fill: white; }
+
+        .brand-text h1 {
+            font-size: 1.15rem;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .brand-text .version-tag {
+            font-size: 0.65rem;
+            font-family: var(--font-mono);
+            background: rgba(56, 189, 248, 0.15);
+            color: var(--cyber-blue);
+            padding: 2px 7px;
+            border-radius: 9999px;
+            border: 1px solid rgba(56, 189, 248, 0.3);
+            text-transform: uppercase;
+        }
+
+        .brand-text p {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        /* Heartbeat Status */
+        .soc-status {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.25);
+            padding: 0.4rem 0.9rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: #34d399;
+        }
+
+        .pulse-ring {
+            width: 8px;
+            height: 8px;
+            background-color: #10b981;
+            border-radius: 50%;
+            position: relative;
+        }
+
+        .pulse-ring::after {
+            content: '';
+            position: absolute;
+            top: -4px; left: -4px; right: -4px; bottom: -4px;
+            border-radius: 50%;
+            border: 2px solid #10b981;
+            animation: pulse-wave 2s infinite;
+        }
+
+        @keyframes pulse-wave {
+            0% { transform: scale(0.6); opacity: 1; }
+            100% { transform: scale(2.2); opacity: 0; }
+        }
+
+        /* KPI Metric Cards */
+        .kpi-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            padding: 1.5rem 2rem 0.5rem 2rem;
+        }
+
+        .kpi-card {
+            background: var(--bg-card);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 1.15rem 1.25rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .kpi-card:hover {
+            transform: translateY(-2px);
+            border-color: rgba(255, 255, 255, 0.16);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
+        }
+
+        .kpi-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 4px; height: 100%;
+            background: var(--accent-color, var(--cyber-blue));
+        }
+
+        .kpi-info h3 {
+            font-size: 0.72rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            margin-bottom: 0.35rem;
+        }
+
+        .kpi-info .kpi-num {
+            font-size: 1.85rem;
+            font-weight: 800;
+            font-family: var(--font-mono);
+            letter-spacing: -0.03em;
+        }
+
+        .kpi-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.04);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--accent-color, var(--cyber-blue));
+            font-size: 1.25rem;
+        }
+
+        /* Main Workspace Grid */
+        main {
+            display: grid;
+            grid-template-columns: 1fr 420px;
+            gap: 1.5rem;
+            padding: 1rem 2rem 2rem 2rem;
+            flex-grow: 1;
+        }
+
+        @media (max-width: 1280px) {
+            main { grid-template-columns: 1fr; }
+        }
+
+        .card {
+            background: var(--bg-card);
+            backdrop-filter: blur(14px);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.3);
+            margin-bottom: 1.5rem;
+        }
+
+        .card-header {
+            padding: 1.1rem 1.4rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .card-title {
+            font-size: 0.95rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            color: var(--text-main);
+        }
+
+        .card-badge {
+            font-size: 0.7rem;
+            font-family: var(--font-mono);
+            padding: 3px 8px;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-muted);
+        }
+
+        /* Threat Table */
+        .table-wrap {
+            overflow-x: auto;
+            max-height: 440px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+
+        thead th {
+            position: sticky;
+            top: 0;
+            background: #0d1527;
+            padding: 0.8rem 1.2rem;
+            font-size: 0.72rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border);
+            z-index: 10;
+        }
+
+        tbody tr {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        tbody tr:hover {
+            background: rgba(56, 189, 248, 0.06);
+        }
+
+        td {
+            padding: 0.95rem 1.2rem;
+            font-size: 0.85rem;
+            vertical-align: middle;
+        }
+
+        .sender-cell {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .sender-name {
+            font-weight: 600;
+            color: var(--text-main);
+        }
+
+        .sender-email {
+            font-size: 0.74rem;
+            font-family: var(--font-mono);
+            color: var(--text-muted);
+        }
+
+        .subject-cell {
+            max-width: 280px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            color: #cbd5e1;
+        }
+
+        /* Threat Badges */
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 9px;
+            border-radius: 9999px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            font-family: var(--font-mono);
+            letter-spacing: 0.02em;
+        }
+
+        .pill-crit {
+            background: rgba(239, 68, 68, 0.16);
+            color: #fca5a5;
+            border: 1px solid rgba(239, 68, 68, 0.4);
+            box-shadow: 0 0 12px rgba(239, 68, 68, 0.2);
+        }
+
+        .pill-high {
+            background: rgba(249, 115, 22, 0.16);
+            color: #fdba74;
+            border: 1px solid rgba(249, 115, 22, 0.4);
+            box-shadow: 0 0 12px rgba(249, 115, 22, 0.2);
+        }
+
+        .pill-med {
+            background: rgba(245, 158, 11, 0.16);
+            color: #fde68a;
+            border: 1px solid rgba(245, 158, 11, 0.4);
+        }
+
+        .pill-low {
+            background: rgba(16, 185, 129, 0.16);
+            color: #6ee7b7;
+            border: 1px solid rgba(16, 185, 129, 0.4);
+        }
+
+        /* Map styling */
+        #radar-map {
+            height: 320px;
+            background: #070c18;
+            border-radius: 0 0 16px 16px;
+        }
+
+        /* Campaigns & Graphs */
+        .campaign-card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1rem;
+            margin-bottom: 0.75rem;
+            transition: all 0.2s ease;
+        }
+
+        .campaign-card:hover {
+            border-color: var(--border-highlight);
+            background: rgba(255, 255, 255, 0.04);
+            transform: translateX(3px);
+        }
+
+        .campaign-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .campaign-title {
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+
+        .campaign-meta {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-bottom: 0.5rem;
+        }
+
+        .tag-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+
+        .tag {
+            font-size: 0.68rem;
+            font-family: var(--font-mono);
+            background: rgba(56, 189, 248, 0.1);
+            color: var(--cyber-blue);
+            padding: 2px 6px;
+            border-radius: 4px;
+            border: 1px solid rgba(56, 189, 248, 0.2);
+        }
+
+        /* Manual Lab Form */
+        .lab-input {
+            width: 100%;
+            background: rgba(6, 9, 19, 0.8);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-main);
+            padding: 0.65rem 0.85rem;
+            font-family: var(--font-sans);
+            font-size: 0.85rem;
+            margin-bottom: 0.75rem;
+            transition: border-color 0.2s;
+        }
+
+        .lab-input:focus {
+            outline: none;
+            border-color: var(--cyber-blue);
+            box-shadow: 0 0 10px rgba(56, 189, 248, 0.25);
+        }
+
+        textarea.lab-input {
+            font-family: var(--font-mono);
+            font-size: 0.78rem;
+            resize: vertical;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 0.65rem 1.2rem;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+            border: none;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #0284c7, #4f46e5);
+            color: white;
+            box-shadow: 0 4px 15px rgba(2, 132, 199, 0.35);
+        }
+
+        .btn-primary:hover {
+            box-shadow: 0 6px 20px rgba(2, 132, 199, 0.5);
+            transform: translateY(-1px);
+        }
+
+        .btn-ghost {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-muted);
+            border: 1px solid var(--border);
+        }
+
+        .btn-ghost:hover {
+            color: var(--text-main);
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        /* Slide-over Inspection Drawer */
+        .drawer-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(6, 9, 19, 0.7);
+            backdrop-filter: blur(8px);
+            z-index: 100;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        .drawer-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .drawer {
+            position: fixed;
+            top: 0; right: 0; bottom: 0;
+            width: 580px;
+            max-width: 90vw;
+            background: #0b1120;
+            border-left: 1px solid var(--border);
+            z-index: 101;
+            box-shadow: -15px 0 40px rgba(0, 0, 0, 0.6);
+            transform: translateX(100%);
+            transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .drawer.active {
+            transform: translateX(0);
+        }
+
+        .drawer-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .drawer-body {
+            padding: 1.5rem;
+            overflow-y: auto;
+            flex-grow: 1;
+        }
+
+        .drawer-footer {
+            padding: 1.25rem 1.5rem;
+            border-top: 1px solid var(--border);
+            background: rgba(255, 255, 255, 0.02);
+            display: flex;
+            gap: 1rem;
+        }
+
+        /* Score Display in Drawer */
+        .score-banner {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+            padding: 1.25rem;
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border);
+            margin-bottom: 1.5rem;
+        }
+
+        .score-circle {
+            width: 72px;
+            height: 72px;
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.75rem;
+            font-weight: 800;
+            font-family: var(--font-mono);
+            border: 4px solid var(--score-color, var(--cyber-blue));
+            box-shadow: 0 0 20px var(--score-glow, rgba(56, 189, 248, 0.3));
+        }
+
+        .score-circle span {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            font-weight: 600;
+            color: var(--text-muted);
+            margin-top: -3px;
+        }
+
+        /* Forensic Tab Group */
+        .forensic-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.75rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .auth-box {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 0.75rem;
+            text-align: center;
+        }
+
+        .auth-label {
+            font-size: 0.68rem;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        .auth-val {
+            font-size: 1rem;
+            font-weight: 800;
+            font-family: var(--font-mono);
+            margin-top: 0.25rem;
+        }
+
+        .val-pass { color: var(--risk-low); }
+        .val-fail { color: var(--risk-crit); }
+        .val-none { color: var(--text-dim); }
+
+        .detail-row {
+            margin-bottom: 1.25rem;
+        }
+
+        .detail-label {
+            font-size: 0.72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--text-muted);
+            margin-bottom: 0.4rem;
+        }
+
+        .detail-value {
+            font-size: 0.88rem;
+            background: rgba(6, 9, 19, 0.6);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 0.75rem;
+            font-family: var(--font-mono);
+            word-break: break-all;
+        }
+
+        .reasons-list {
+            list-style: none;
+        }
+
+        .reasons-list li {
+            position: relative;
+            padding-left: 1.4rem;
+            font-size: 0.85rem;
+            color: #e2e8f0;
+            margin-bottom: 0.5rem;
+            line-height: 1.4;
+        }
+
+        .reasons-list li::before {
+            content: '⚠️';
+            position: absolute;
+            left: 0; top: 1px;
+            font-size: 0.8rem;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.12); border-radius: 9999px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
+    </style>
+</head>
+<body>
+
+    <!-- Header -->
+    <header>
+        <div class="brand-container">
+            <div class="brand-logo">
+                <svg viewBox="0 0 24 24"><path d="M12 2L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-3zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/></svg>
+            </div>
+            <div class="brand-text">
+                <h1>PhishTrace SOC <span class="version-tag">SIH-26106 Engine</span></h1>
+                <p>AI Email Forensics, Geolocation Radar & Threat Correlation</p>
+            </div>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 1.5rem;">
+            <div class="soc-status">
+                <div class="pulse-ring"></div>
+                <span>TELEMETRY ACTIVE</span>
+            </div>
+            <button class="btn btn-ghost" onclick="fetchFullTelemetry()" style="padding: 0.4rem 0.8rem; font-size: 0.78rem;">
+                🔄 Refresh Radar
+            </button>
+        </div>
+    </header>
+
+    <!-- Top KPI Bar -->
+    <section class="kpi-row">
+        <div class="kpi-card" style="--accent-color: #38bdf8;">
+            <div class="kpi-info">
+                <h3>Total Scanned</h3>
+                <div class="kpi-num" id="kpi-total">0</div>
+            </div>
+            <div class="kpi-icon">📨</div>
+        </div>
+        <div class="kpi-card" style="--accent-color: #ef4444;">
+            <div class="kpi-info">
+                <h3>Threats Intercepted</h3>
+                <div class="kpi-num" id="kpi-flagged" style="color: #f87171;">0</div>
+            </div>
+            <div class="kpi-icon">🛡️</div>
+        </div>
+        <div class="kpi-card" style="--accent-color: #f97316;">
+            <div class="kpi-info">
+                <h3>Critical Attacks</h3>
+                <div class="kpi-num" id="kpi-critical" style="color: #fb923c;">0</div>
+            </div>
+            <div class="kpi-icon">☣️</div>
+        </div>
+        <div class="kpi-card" style="--accent-color: #818cf8;">
+            <div class="kpi-info">
+                <h3>Active Campaigns</h3>
+                <div class="kpi-num" id="kpi-campaigns" style="color: #a5b4fc;">0</div>
+            </div>
+            <div class="kpi-icon">🕸️</div>
+        </div>
+    </section>
+
+    <!-- Workspace Main Grid -->
+    <main>
+        <!-- Left Side: Live Feed & Origin Map -->
+        <div>
+            <!-- Live Feed Table -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <span>⚡ Live Email Threat Stream</span>
+                    </div>
+                    <span class="card-badge" id="feed-count">0 Events Loaded</span>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Sender Profile</th>
+                                <th>Subject Analysis</th>
+                                <th>Risk Score</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="scans-tbody">
+                            <tr>
+                                <td colspan="5" style="text-align: center; color: var(--text-dim); padding: 2rem;">
+                                    Streaming telemetry...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Origin Geolocation Radar Map -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <span>🌍 Origin Infrastructure & Geolocation Radar</span>
+                    </div>
+                    <span class="card-badge">MaxMind + Tor/VPN Tracing</span>
+                </div>
+                <div id="radar-map"></div>
+            </div>
+
+            <!-- Manual Forensics Lab -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <span>🧪 On-Demand Forensic Analyzer Lab</span>
+                    </div>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="btn btn-ghost" onclick="loadSample('paypal')" style="padding: 3px 8px; font-size: 0.72rem;">Load PayPal BEC</button>
+                        <button class="btn btn-ghost" onclick="loadSample('m365')" style="padding: 3px 8px; font-size: 0.72rem;">Load M365 Credential</button>
+                        <button class="btn btn-ghost" onclick="loadSample('clean')" style="padding: 3px 8px; font-size: 0.72rem;">Load Clean Email</button>
+                    </div>
+                </div>
+                <div style="padding: 1.4rem;">
+                    <!-- Enterprise EML / MSG Drag & Drop Zone -->
+                    <div id="eml-dropzone" style="border: 2px dashed rgba(56, 189, 248, 0.4); border-radius: 12px; padding: 1.25rem; text-align: center; background: rgba(56, 189, 248, 0.04); margin-bottom: 1.25rem; cursor: pointer; transition: all 0.2s;" onclick="document.getElementById('eml-upload-input').click()">
+                        <input type="file" id="eml-upload-input" accept=".eml,.msg" style="display: none;" onchange="handleEMLUpload(event)">
+                        <div style="font-size: 24px; margin-bottom: 4px;">📥</div>
+                        <b style="font-size: 0.92rem; color: var(--cyber-blue);">Drop Raw RFC 5322 .EML or .MSG File Here</b>
+                        <p style="font-size: 0.74rem; color: var(--text-muted); margin-top: 2px;">
+                            Auto-decompiles MIME multipart, extracts attachments, computes SHA-256 hashes & runs PyTorch Neural Network
+                        </p>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                        <div>
+                            <label class="detail-label">Sender Display Name</label>
+                            <input type="text" id="lab-name" class="lab-input" placeholder="e.g. PayPal Security Team">
+                        </div>
+                        <div>
+                            <label class="detail-label">Sender Email Address</label>
+                            <input type="text" id="lab-email" class="lab-input" placeholder="e.g. security@verify-notice.com">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="detail-label">Subject Line</label>
+                        <input type="text" id="lab-subject" class="lab-input" placeholder="e.g. URGENT: Account Suspension Notice">
+                    </div>
+                    <div>
+                        <label class="detail-label">Message Body Snippet</label>
+                        <textarea id="lab-body" class="lab-input" rows="3" placeholder="Enter email text to analyze linguistic urgency, financial cues, and URLs..."></textarea>
+                    </div>
+                    <div>
+                        <label class="detail-label">Raw Headers (Optional for SPF/DKIM/Relay Trace)</label>
+                        <textarea id="lab-headers" class="lab-input" rows="3" placeholder="From: ...&#10;Authentication-Results: spf=fail; dkim=fail&#10;Received: from 185.220.101.1..."></textarea>
+                    </div>
+                    <div style="display: flex; justify-content: flex-end; margin-top: 0.5rem;">
+                        <button class="btn btn-primary" onclick="submitManualScan()" id="btn-scan">
+                            🚀 Run Deep AI Forensic Scan
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Side: Intelligence & Risk Breakdown -->
+        <div>
+            <!-- Risk Severity Distribution -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <span>📊 Severity Classification</span>
+                    </div>
+                    <span class="card-badge">AI Classifier</span>
+                </div>
+                <div style="padding: 1.25rem; height: 240px; display: flex; align-items: center; justify-content: center;">
+                    <canvas id="riskDoughnut"></canvas>
+                </div>
+            </div>
+
+            <!-- Targeted Domains -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <span>🎯 Top Target Impersonations</span>
+                    </div>
+                    <span class="card-badge">Frequency</span>
+                </div>
+                <div style="padding: 1.25rem; height: 210px;">
+                    <canvas id="domainBarChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Campaign Cluster Intelligence -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <span>🕸️ Correlated Attack Campaigns</span>
+                    </div>
+                    <span class="card-badge">NetworkX Clustered</span>
+                </div>
+                <div style="padding: 1.25rem;" id="campaigns-container">
+                    <div style="text-align: center; color: var(--text-dim); padding: 1.5rem;">
+                        Scanning threat infrastructure...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Inspection Drawer Overlay & Drawer -->
+    <div class="drawer-overlay" id="drawer-overlay" onclick="closeDrawer()"></div>
+    <aside class="drawer" id="drawer">
+        <div class="drawer-header">
+            <div>
+                <h2 style="font-size: 1.1rem; font-weight: 800;">Forensic Incident Dossier</h2>
+                <p style="font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono);" id="drawer-scan-id">SCAN-ID: #...</p>
+            </div>
+            <button class="btn btn-ghost" onclick="closeDrawer()" style="padding: 0.4rem 0.6rem;">✕</button>
+        </div>
+
+        <div class="drawer-body">
+            <!-- Score Banner -->
+            <div class="score-banner" id="drawer-score-banner">
+                <div class="score-circle" id="drawer-score-circle">
+                    <span id="drawer-score-num">0</span>
+                    <span>Score</span>
+                </div>
+                <div>
+                    <h3 style="font-size: 1.15rem; font-weight: 800;" id="drawer-risk-level">CRITICAL THREAT</h3>
+                    <p style="font-size: 0.8rem; color: var(--text-muted);" id="drawer-timestamp">Scanned on ...</p>
+                </div>
+            </div>
+
+            <!-- Authentication Triad -->
+            <div class="detail-label">Authentication Header Verification</div>
+            <div class="forensic-grid">
+                <div class="auth-box">
+                    <div class="auth-label">SPF Check</div>
+                    <div class="auth-val" id="drawer-spf">—</div>
+                </div>
+                <div class="auth-box">
+                    <div class="auth-label">DKIM Sign</div>
+                    <div class="auth-val" id="drawer-dkim">—</div>
+                </div>
+                <div class="auth-box">
+                    <div class="auth-label">DMARC Policy</div>
+                    <div class="auth-val" id="drawer-dmarc">—</div>
+                </div>
+            </div>
+
+            <!-- Email Meta -->
+            <div class="detail-row">
+                <div class="detail-label">Sender Identity</div>
+                <div class="detail-value" id="drawer-sender">—</div>
+            </div>
+
+            <div class="detail-row">
+                <div class="detail-label">Subject Line</div>
+                <div class="detail-value" id="drawer-subject">—</div>
+            </div>
+
+            <div class="detail-row">
+                <div class="detail-label">Origin Network & Geolocation</div>
+                <div class="detail-value" id="drawer-geo">—</div>
+            </div>
+
+            <div class="detail-row">
+                <div class="detail-label">AI Threat Indicators & Reasons</div>
+                <ul class="reasons-list" id="drawer-reasons"></ul>
+            </div>
+
+            <!-- Extracted Attachments Section -->
+            <div class="detail-row" id="drawer-attachments-row" style="display: none;">
+                <div class="detail-label" style="color: #f87171;">Extracted Payloads & Attachments</div>
+                <div class="detail-value" id="drawer-attachments-val" style="font-size: 0.76rem;"></div>
+            </div>
+
+            <!-- Automated SOAR Actions -->
+            <div class="detail-row">
+                <div class="detail-label" style="color: var(--cyber-blue);">Enterprise SOAR Automated Response Playbooks</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.35rem;">
+                    <button class="btn btn-ghost" onclick="executeSOARQuarantine()" style="font-size: 0.74rem; padding: 7px 10px; border-color: rgba(239,68,68,0.35); color: #f87171;">
+                        🛡️ Quarantine Message
+                    </button>
+                    <button class="btn btn-ghost" onclick="executeSOARFirewall()" style="font-size: 0.74rem; padding: 7px 10px; border-color: rgba(56,189,248,0.35); color: #38bdf8;">
+                        🚫 Firewall / DNS Sinkhole
+                    </button>
+                    <button class="btn btn-ghost" onclick="downloadSTIX()" style="font-size: 0.74rem; padding: 7px 10px;">
+                        ⚡ Export STIX 2.1
+                    </button>
+                    <button class="btn btn-ghost" onclick="downloadSIEM()" style="font-size: 0.74rem; padding: 7px 10px;">
+                        📊 Export Splunk SIEM
+                    </button>
+                </div>
+            </div>
+
+            <div class="detail-row">
+                <div class="detail-label">Evidence Integrity Hash (SHA-256)</div>
+                <div class="detail-value" style="font-size: 0.72rem; color: var(--cyber-blue);" id="drawer-hash">—</div>
+            </div>
+        </div>
+
+        <div class="drawer-footer">
+            <button class="btn btn-primary" id="btn-download-pdf" style="flex: 1;">
+                📄 Download PDF Forensic Report
+            </button>
+            <button class="btn btn-ghost" id="btn-download-json" style="flex: 1;">
+                💾 Export Evidence JSON
+            </button>
+        </div>
+    </aside>
+
+    <!-- JavaScript Controller -->
+    <script>
+        const API_BASE = window.location.origin;
+        let leafletMap = null;
+        let mapMarkers = [];
+        let doughnutChart = null;
+        let barChart = null;
+        let activeScanId = null;
+
+        // Init App on Load
+        document.addEventListener('DOMContentLoaded', () => {
+            initMap();
+            initCharts();
+            fetchFullTelemetry();
+            setInterval(fetchFullTelemetry, 10000); // Polling every 10s
+        });
+
+        // Initialize Dark Leaflet Map
+        function initMap() {
+            leafletMap = L.map('radar-map', {
+                zoomControl: false,
+                attributionControl: false
+            }).setView([20, 0], 2);
+
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                maxZoom: 18,
+                subdomains: 'abcd'
+            }).addTo(leafletMap);
+        }
+
+        // Initialize Chart.js
+        function initCharts() {
+            const ctxDoughnut = document.getElementById('riskDoughnut').getContext('2d');
+            doughnutChart = new Chart(ctxDoughnut, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Critical', 'High', 'Medium', 'Low'],
+                    datasets: [{
+                        data: [0, 0, 0, 0],
+                        backgroundColor: ['#ef4444', '#f97316', '#f59e0b', '#10b981'],
+                        borderWidth: 0,
+                        hoverOffset: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { color: '#94a3b8', font: { family: 'Plus Jakarta Sans', size: 11 } } }
+                    },
+                    cutout: '72%'
+                }
+            });
+
+            const ctxBar = document.getElementById('domainBarChart').getContext('2d');
+            barChart = new Chart(ctxBar, {
+                type: 'bar',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Interceptions',
+                        data: [],
+                        backgroundColor: '#38bdf8',
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#64748b' } },
+                        y: { grid: { display: false }, ticks: { color: '#94a3b8', font: { family: 'JetBrains Mono', size: 10 } } }
+                    }
+                }
+            });
+        }
+
+        // Fetch Telemetry & Populate All Widgets
+        async function fetchFullTelemetry() {
+            try {
+                // 1. Fetch Stats
+                const statsRes = await fetch(`${API_BASE}/api/stats`);
+                if (statsRes.ok) {
+                    const stats = await statsRes.json();
+                    document.getElementById('kpi-total').innerText = stats.total_scans || 0;
+                    document.getElementById('kpi-flagged').innerText = stats.total_flagged || 0;
+                    document.getElementById('kpi-critical').innerText = stats.high_risk_count || 0;
+                    document.getElementById('kpi-campaigns').innerText = stats.campaign_count || 0;
+
+                    // Update Doughnut
+                    if (stats.risk_distribution && doughnutChart) {
+                        doughnutChart.data.datasets[0].data = [
+                            stats.risk_distribution.CRITICAL || 0,
+                            stats.risk_distribution.HIGH || 0,
+                            stats.risk_distribution.MEDIUM || 0,
+                            stats.risk_distribution.LOW || 0
+                        ];
+                        doughnutChart.update();
+                    }
+
+                    // Update Bar Chart
+                    if (stats.top_sender_domains && barChart) {
+                        barChart.data.labels = stats.top_sender_domains.map(d => d.domain);
+                        barChart.data.datasets[0].data = stats.top_sender_domains.map(d => d.count);
+                        barChart.update();
+                    }
+
+                    // Update Map
+                    if (stats.geo_distribution && leafletMap) {
+                        mapMarkers.forEach(m => leafletMap.removeLayer(m));
+                        mapMarkers = [];
+
+                        stats.geo_distribution.forEach(geo => {
+                            if (geo.lat && geo.lon) {
+                                const color = geo.risk_score >= 80 ? '#ef4444' : (geo.risk_score >= 60 ? '#f97316' : '#10b981');
+                                const markerHtml = `<div style="background-color: ${color}; width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 14px ${color}; border: 2px solid #fff;"></div>`;
+                                const customIcon = L.divIcon({ html: markerHtml, className: '' });
+
+                                const marker = L.marker([geo.lat, geo.lon], { icon: customIcon }).addTo(leafletMap);
+                                marker.bindPopup(`
+                                    <div style="font-family: var(--font-sans); color: #0f172a; padding: 4px;">
+                                        <b style="font-size: 0.9rem;">${geo.city || 'Unknown'}, ${geo.country || 'Unknown'}</b><br>
+                                        <span style="font-size: 0.75rem; color: #475569;">IP: ${geo.ip}</span><br>
+                                        <span style="font-size: 0.75rem; color: #475569;">Infra: ${geo.infra_type || 'Unknown'}</span><br>
+                                        <b style="color: ${color};">Threat Score: ${geo.risk_score}/100</b>
+                                    </div>
+                                `);
+                                mapMarkers.push(marker);
+                            }
+                        });
+                    }
+                }
+
+                // 2. Fetch Recent Scans Table
+                const scansRes = await fetch(`${API_BASE}/api/scans?limit=25`);
+                if (scansRes.ok) {
+                    const scans = await scansRes.json();
+                    document.getElementById('feed-count').innerText = `${scans.length} Events Logged`;
+                    renderScansTable(scans);
+                }
+
+                // 3. Fetch Campaigns
+                const campRes = await fetch(`${API_BASE}/api/campaigns`);
+                if (campRes.ok) {
+                    const camps = await campRes.json();
+                    renderCampaigns(camps);
+                }
+
+            } catch (err) {
+                console.error("Telemetry sync error:", err);
+            }
+        }
+
+        // Render Scans Table
+        function renderScansTable(scans) {
+            const tbody = document.getElementById('scans-tbody');
+            if (!scans || scans.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-dim); padding: 2rem;">No telemetry recorded yet.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = scans.map(s => {
+                const score = s.risk_score || 0;
+                let pillClass = 'pill-low';
+                let pillLabel = 'LOW RISK';
+                if (score >= 80) { pillClass = 'pill-crit'; pillLabel = 'CRITICAL'; }
+                else if (score >= 60) { pillClass = 'pill-high'; pillLabel = 'HIGH RISK'; }
+                else if (score >= 30) { pillClass = 'pill-med'; pillLabel = 'SUSPICIOUS'; }
+
+                const timeStr = s.timestamp ? new Date(s.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—';
+                const senderName = s.sender_name || (s.sender_email ? s.sender_email.split('@')[0] : 'Unknown');
+                const senderEmail = s.sender_email || s.sender || 'No email';
+
+                return `
+                    <tr onclick="openIncidentDrawer('${s.id}')">
+                        <td style="font-family: var(--font-mono); color: var(--text-muted); font-size: 0.78rem;">${timeStr}</td>
+                        <td>
+                            <div class="sender-cell">
+                                <span class="sender-name">${escapeHtml(senderName)}</span>
+                                <span class="sender-email">${escapeHtml(senderEmail)}</span>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="subject-cell">${escapeHtml(s.subject || '(No subject)')}</div>
+                        </td>
+                        <td>
+                            <span class="pill ${pillClass}">● ${pillLabel} (${score})</span>
+                        </td>
+                        <td>
+                            <button class="btn btn-ghost" style="padding: 3px 8px; font-size: 0.72rem;">Inspect →</button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // Render Campaigns
+        function renderCampaigns(campaigns) {
+            const container = document.getElementById('campaigns-container');
+            if (!campaigns || campaigns.length === 0) {
+                container.innerHTML = `<div style="text-align: center; color: var(--text-dim); padding: 1.5rem;">No coordinated attack campaigns detected.</div>`;
+                return;
+            }
+
+            container.innerHTML = campaigns.map(c => {
+                const badge = c.risk_level === 'CRITICAL' ? 'pill-crit' : (c.risk_level === 'HIGH' ? 'pill-high' : 'pill-med');
+                const domains = (c.domains || []).slice(0, 3).map(d => `<span class="tag">${escapeHtml(d)}</span>`).join('');
+                return `
+                    <div class="campaign-card">
+                        <div class="campaign-head">
+                            <span class="campaign-title">${escapeHtml(c.name)}</span>
+                            <span class="pill ${badge}" style="font-size: 0.65rem;">${c.risk_level}</span>
+                        </div>
+                        <div class="campaign-meta">
+                            Detected <b>${c.scan_count}</b> related attacks across infrastructure
+                        </div>
+                        <div class="tag-list">
+                            ${domains}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Open Incident Drawer
+        async function openIncidentDrawer(scanId) {
+            activeScanId = scanId;
+            try {
+                const res = await fetch(`${API_BASE}/api/scans/${scanId}`);
+                if (!res.ok) return;
+                const scan = await res.json();
+
+                document.getElementById('drawer-scan-id').innerText = `INCIDENT REF: #${scan.id}`;
+                const score = scan.risk_score || 0;
+                document.getElementById('drawer-score-num').innerText = score;
+
+                let scoreColor = '#10b981';
+                let glowColor = 'rgba(16, 185, 129, 0.4)';
+                let levelText = 'LOW RISK';
+                if (score >= 80) { scoreColor = '#ef4444'; glowColor = 'rgba(239, 68, 68, 0.4)'; levelText = 'CRITICAL RISK'; }
+                else if (score >= 60) { scoreColor = '#f97316'; glowColor = 'rgba(249, 115, 22, 0.4)'; levelText = 'HIGH RISK'; }
+                else if (score >= 30) { scoreColor = '#f59e0b'; glowColor = 'rgba(245, 158, 11, 0.4)'; levelText = 'SUSPICIOUS THREAT'; }
+
+                const circle = document.getElementById('drawer-score-circle');
+                circle.style.setProperty('--score-color', scoreColor);
+                circle.style.setProperty('--score-glow', glowColor);
+                circle.style.color = scoreColor;
+
+                document.getElementById('drawer-risk-level').innerText = levelText;
+                document.getElementById('drawer-risk-level').style.color = scoreColor;
+                document.getElementById('drawer-timestamp').innerText = scan.timestamp ? new Date(scan.timestamp).toUTCString() : 'N/A';
+
+                // Auth badges
+                renderAuthBadge('drawer-spf', scan.spf_result);
+                renderAuthBadge('drawer-dkim', scan.dkim_result);
+                renderAuthBadge('drawer-dmarc', scan.dmarc_result);
+
+                document.getElementById('drawer-sender').innerText = `${scan.sender_name || ''} <${scan.sender_email || scan.sender || 'Unknown'}>`;
+                document.getElementById('drawer-subject').innerText = scan.subject || '(No subject)';
+                document.getElementById('drawer-geo').innerText = `${scan.geo_city || '?'}, ${scan.geo_country || 'Unknown'} (IP: ${scan.origin_ip || 'N/A'}, Infra: ${scan.infra_type || 'Unknown'}, ASN: ${scan.asn || 'N/A'})`;
+
+                // Reasons
+                const rList = document.getElementById('drawer-reasons');
+                const reasons = scan.reasons || [];
+                if (reasons.length > 0) {
+                    rList.innerHTML = reasons.map(r => `<li>${escapeHtml(typeof r === 'string' ? r : (r.detail || JSON.stringify(r)))}</li>`).join('');
+                } else {
+                    rList.innerHTML = `<li style="color: #64748b;">No abnormal heuristics detected.</li>`;
+                }
+
+                document.getElementById('drawer-hash').innerText = scan.evidence_hash || 'SHA-256 NOT COMPUTED';
+
+                // Configure buttons
+                document.getElementById('btn-download-pdf').onclick = () => {
+                    window.open(`${API_BASE}/api/scans/${scan.id}/report?format=pdf`, '_blank');
+                };
+                document.getElementById('btn-download-json').onclick = () => {
+                    window.open(`${API_BASE}/api/scans/${scan.id}/report?format=json`, '_blank');
+                };
+
+                // Show drawer
+                document.getElementById('drawer-overlay').classList.add('active');
+                document.getElementById('drawer').classList.add('active');
+            } catch (err) {
+                console.error("Error opening dossier:", err);
+            }
+        }
+
+        function renderAuthBadge(elementId, val) {
+            const el = document.getElementById(elementId);
+            if (!val || val === 'none') {
+                el.innerText = 'NONE';
+                el.className = 'auth-val val-none';
+            } else if (val.toLowerCase() === 'pass') {
+                el.innerText = 'PASS';
+                el.className = 'auth-val val-pass';
+            } else {
+                el.innerText = val.toUpperCase();
+                el.className = 'auth-val val-fail';
+            }
+        }
+
+        function closeDrawer() {
+            document.getElementById('drawer-overlay').classList.remove('active');
+            document.getElementById('drawer').classList.remove('active');
+        }
+
+        // Manual Scan Submission
+        async function submitManualScan() {
+            const btn = document.getElementById('btn-scan');
+            btn.disabled = true;
+            btn.innerText = 'Analyzing Heuristics...';
+
+            const payload = {
+                sender_name: document.getElementById('lab-name').value,
+                sender_email: document.getElementById('lab-email').value,
+                subject: document.getElementById('lab-subject').value,
+                body_text: document.getElementById('lab-body').value,
+                raw_headers: document.getElementById('lab-headers').value
+            };
+
+            try {
+                const res = await fetch(`${API_BASE}/api/analyze`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    const result = await res.json();
+                    await fetchFullTelemetry();
+                    if (result.scan_id) {
+                        openIncidentDrawer(result.scan_id);
+                    }
+                }
+            } catch (err) {
+                alert('Analysis failed: ' + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerText = '🚀 Run Deep AI Forensic Scan';
+            }
+        }
+
+        // Preset Samples for Fast Judging Demonstration
+        function loadSample(type) {
+            if (type === 'paypal') {
+                document.getElementById('lab-name').value = 'PayPal Fraud Alerts';
+                document.getElementById('lab-email').value = 'security@paypal-verification-center.net';
+                document.getElementById('lab-subject').value = 'URGENT: Your account has been temporarily locked';
+                document.getElementById('lab-body').value = 'Dear Customer, unauthorized card charges were detected. Immediate action required. Wire transfer $450 or verify your identity at http://185.220.101.1/login or bit.ly/restore-account.';
+                document.getElementById('lab-headers').value = 'From: PayPal Fraud Alerts <security@paypal-verification-center.net>\nReturn-Path: <bounce@spoof-relays.ru>\nAuthentication-Results: spf=fail; dkim=fail; dmarc=fail\nReceived: from 185.220.101.1 by mx.google.com';
+            } else if (type === 'm365') {
+                document.getElementById('lab-name').value = 'Microsoft 365 Admin Center';
+                document.getElementById('lab-email').value = 'notifications@msoft-office-portal.org';
+                document.getElementById('lab-subject').value = 'Mandatory Security Update: Your password expires today';
+                document.getElementById('lab-body').value = 'Dear User, your company single sign-on token has expired. Verify your Microsoft identity immediately to avoid mailbox suspension: http://185.220.101.2/sso-login.';
+                document.getElementById('lab-headers').value = 'From: Microsoft 365 Admin Center <notifications@msoft-office-portal.org>\nReturn-Path: <nobody@bulletproof-vps.su>\nAuthentication-Results: spf=softfail; dkim=fail; dmarc=fail\nReceived: from 185.220.101.2 by mx.google.com';
+            } else {
+                document.getElementById('lab-name').value = 'GitHub Notifications';
+                document.getElementById('lab-email').value = 'notifications@github.com';
+                document.getElementById('lab-subject').value = '[GitHub] A personal access token has expired';
+                document.getElementById('lab-body').value = 'Hi @dharma, your personal access token "deploy-token" has expired. You can regenerate or view your tokens in your GitHub account settings at https://github.com/settings/tokens.';
+                document.getElementById('lab-headers').value = 'From: GitHub <notifications@github.com>\nReturn-Path: <noreply@github.com>\nAuthentication-Results: spf=pass; dkim=pass; dmarc=pass\nReceived: from 140.82.112.4 by mx.google.com';
+            }
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str).replace(/[&<>"']/g, function(m) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
+            });
+        }
+
+        // Setup EML Drag and Drop
+        const dropZone = document.getElementById('eml-dropzone');
+        if (dropZone) {
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropZone.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dropZone.style.borderColor = 'var(--cyber-blue)';
+                    dropZone.style.background = 'rgba(56, 189, 248, 0.12)';
+                }, false);
+            });
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dropZone.style.borderColor = 'rgba(56, 189, 248, 0.4)';
+                    dropZone.style.background = 'rgba(56, 189, 248, 0.04)';
+                }, false);
+            });
+            dropZone.addEventListener('drop', (e) => {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                if (files.length > 0) uploadEMLFile(files[0]);
+            });
+        }
+
+        function handleEMLUpload(event) {
+            const file = event.target.files[0];
+            if (file) uploadEMLFile(file);
+        }
+
+        async function uploadEMLFile(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const dropZone = document.getElementById('eml-dropzone');
+            dropZone.innerHTML = `
+                <div style="font-size: 24px; animation: spin 1s linear infinite;">⏳</div>
+                <b style="color: var(--cyber-blue);">Decompiling MIME Multipart & Ingesting Payload...</b>
+                <p style="font-size: 0.72rem; color: var(--text-muted);">${file.name} (${(file.size/1024).toFixed(1)} KB)</p>
+            `;
+
+            try {
+                const res = await fetch(`${API_BASE}/api/analyze/eml`, {
+                    method: 'POST',
+                    body: formData
+                });
+                if (res.ok) {
+                    const result = await res.json();
+                    await fetchFullTelemetry();
+                    if (result.scan_id) {
+                        await openIncidentDrawer(result.scan_id);
+                        if (result.attachments && result.attachments.length > 0) {
+                            const attRow = document.getElementById('drawer-attachments-row');
+                            const attVal = document.getElementById('drawer-attachments-val');
+                            attRow.style.display = 'block';
+                            attVal.innerHTML = result.attachments.map(a => `
+                                <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.06);">
+                                    <div>
+                                        <b style="color: ${a.threat_verdict === 'CRITICAL' ? '#f87171' : '#38bdf8'};">${escapeHtml(a.filename)}</b>
+                                        <span style="font-size: 0.7rem; color: #94a3b8;"> (${a.size_formatted})</span>
+                                        <div style="font-size: 0.65rem; color: #64748b;">SHA256: ${a.sha256}</div>
+                                    </div>
+                                    <span class="pill ${a.threat_verdict === 'CRITICAL' ? 'pill-crit' : 'pill-low'}" style="font-size: 0.65rem;">
+                                        ${a.threat_verdict}
+                                    </span>
+                                </div>
+                            `).join('');
+                        }
+                    }
+                } else {
+                    alert('EML Analysis Error: ' + res.statusText);
+                }
+            } catch (err) {
+                alert('Upload failed: ' + err.message);
+            } finally {
+                dropZone.innerHTML = `
+                    <input type="file" id="eml-upload-input" accept=".eml,.msg" style="display: none;" onchange="handleEMLUpload(event)">
+                    <div style="font-size: 24px; margin-bottom: 4px;">📥</div>
+                    <b style="font-size: 0.92rem; color: var(--cyber-blue);">Drop Raw RFC 5322 .EML or .MSG File Here</b>
+                    <p style="font-size: 0.74rem; color: var(--text-muted); margin-top: 2px;">
+                        Auto-decompiles MIME multipart, extracts attachments, computes SHA-256 hashes & runs PyTorch Neural Network
+                    </p>
+                `;
+            }
+        }
+
+        // SOAR Response Functions
+        async function executeSOARQuarantine() {
+            if (!activeScanId) return;
+            try {
+                const res = await fetch(`${API_BASE}/api/soar/quarantine/${activeScanId}`, { method: 'POST' });
+                if (res.ok) {
+                    const data = await res.json();
+                    alert(`🛡️ SOAR PLAYBOOK EXECUTED!\n\nIncident ID: ${data.incident_id}\nStatus: ${data.status}\nAction: ${data.action}\nAudit Vault: ${data.quarantine_mailbox}`);
+                }
+            } catch (err) {
+                alert('Quarantine execution error: ' + err.message);
+            }
+        }
+
+        async function executeSOARFirewall() {
+            if (!activeScanId) return;
+            try {
+                const res = await fetch(`${API_BASE}/api/soar/block-rules/${activeScanId}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    const rules = `=== BIND DNS SINKHOLE (RPZ) ===\n${data.dns_rpz_sinkhole}\n\n=== LINUX IPTABLES RULE ===\n${data.iptables}\n\n=== WINDOWS POWERSHELL FIREWALL ===\n${data.powershell_firewall}\n\n=== CISCO ASA ACL ===\n${data.cisco_acl}`;
+                    prompt("Generated Network Defense Sinkhole & Firewall Rules (Ctrl+C to copy):", rules);
+                }
+            } catch (err) {
+                alert('Firewall rule error: ' + err.message);
+            }
+        }
+
+        function downloadSTIX() {
+            if (!activeScanId) return;
+            window.open(`${API_BASE}/api/scans/${activeScanId}/stix`, '_blank');
+        }
+
+        function downloadSIEM() {
+            if (!activeScanId) return;
+            window.open(`${API_BASE}/api/scans/${activeScanId}/siem?format=splunk`, '_blank');
+        }
+    </script>
+</body>
+</html>

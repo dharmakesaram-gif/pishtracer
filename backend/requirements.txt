@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+python-multipart
+sqlalchemy[asyncio]
+aiosqlite
+aiohttp
+reportlab
+networkx
+scikit-learn
+joblib
+pydantic
+python-dotenv
+geoip2

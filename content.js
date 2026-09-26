@@ -1,143 +1,244 @@
-// PhishTrace content script — runs on mail.google.com
-// Two modes: (1) normal inbox/reading pane -> quick heuristic scan on every opened message
-//            (2) "Show original" raw-source view (?...&view=om&...) -> deep header forensics
+// PhishTrace v2.0 Enterprise Content Script — Gmail Defense Shield
+// Integrates with FastAPI backend for deep AI Threat Forensics
 
-const BRAND_DOMAINS = ["paypal.com","amazon.com","microsoft.com","icicibank.com","hdfcbank.com",
-  "sbi.co.in","google.com","apple.com","netflix.com","irctc.co.in"];
-const URGENCY_CUES = ["urgent","verify your account","suspended","wire transfer","click here",
-  "password expires","invoice attached","act now","confidential","gift card","account will be locked"];
-const CAMPAIGNS = [
-  { name: "Campaign INV-Redwood", domains: ["secure-verify-alerts.com"] },
-  { name: "Campaign GhostInvoice", domains: ["accounts-billing-support.net"] }
-];
-
-function lev(a, b) {
-  const m = [];
-  for (let i = 0; i <= a.length; i++) m[i] = [i];
-  for (let j = 0; j <= b.length; j++) m[0][j] = j;
-  for (let i = 1; i <= a.length; i++)
-    for (let j = 1; j <= b.length; j++)
-      m[i][j] = a[i-1] === b[j-1] ? m[i-1][j-1] : 1 + Math.min(m[i-1][j-1], m[i-1][j], m[i][j-1]);
-  return m[a.length][b.length];
-}
-function domainOf(addr) { const m = (addr||"").match(/@([\w.-]+)/); return m ? m[1].toLowerCase() : null; }
-
-// ---------- MODE 1: quick heuristic scan of an opened message in the reading pane ----------
-function quickScore(senderName, senderEmail, subject, bodyText) {
-  let score = 0; const reasons = [];
-  const dom = domainOf(senderEmail);
-  const lower = (senderName || "").toLowerCase();
-
-  // display-name-vs-domain mismatch: e.g. name says "PayPal Support" but domain isn't paypal.com
-  for (const b of BRAND_DOMAINS) {
-    const brand = b.split(".")[0];
-    if (lower.includes(brand) && dom && dom !== b) {
-      score += 30; reasons.push(`Display name references "${brand}" but sender domain is "${dom}", not "${b}".`);
-      break;
-    }
-  }
-  // lookalike domain
-  if (dom) for (const b of BRAND_DOMAINS) {
-    const d = lev(dom, b);
-    if (d > 0 && d <= 3 && dom !== b) { score += 25; reasons.push(`Sender domain "${dom}" closely resembles "${b}" (possible typosquat).`); break; }
-  }
-  // known campaign domain
-  if (dom && CAMPAIGNS.some(c => c.domains.includes(dom))) {
-    score += 20; reasons.push("Sender domain matches a previously seen fraud campaign fingerprint.");
-  }
-  // urgency / social engineering language
-  const text = ((subject||"") + " " + (bodyText||"")).toLowerCase();
-  const hits = URGENCY_CUES.filter(c => text.includes(c));
-  if (hits.length) { score += Math.min(25, hits.length * 6); reasons.push(`Urgency/social-engineering language: ${hits.join(", ")}.`); }
-
-  return { score: Math.min(100, score), reasons, dom };
+function domainOf(addr) { 
+  const m = (addr || "").match(/@([\w.-]+)/); 
+  return m ? m[1].toLowerCase() : null; 
 }
 
+// ---------- Enterprise Security Warning Banner ----------
 function makeBanner(result) {
-  const level = result.score >= 60 ? "#e8543c" : result.score >= 30 ? "#e0a940" : "#2fbf8f";
-  const label = result.score >= 60 ? "High risk — likely fraudulent" : result.score >= 30 ? "Suspicious — review carefully" : "Low risk";
-  const div = document.createElement("div");
-  div.setAttribute("data-phishtrace-banner", "1");
-  div.style.cssText = `margin:10px 0;padding:10px 14px;border-radius:6px;border-left:4px solid ${level};
-    background:${level}1a;font:13px/1.4 -apple-system,Arial,sans-serif;color:#222`;
-  div.innerHTML = `<b>PhishTrace: ${label} (${result.score}/100)</b>` +
-    (result.reasons.length ? `<ul style="margin:6px 0 0 18px;padding:0">${result.reasons.map(r=>`<li>${r}</li>`).join("")}</ul>` : "");
+  const score = result.risk_score || result.score || 0;
+  
+  let borderColor = '#10b981';
+  let bgColor = 'rgba(16, 185, 129, 0.06)';
+  let tagBg = 'rgba(16, 185, 129, 0.15)';
+  let tagText = '#059669';
+  let levelName = 'VERIFIED SAFE';
+  let iconSvg = '🛡️';
+
+  if (score >= 80) {
+    borderColor = '#ef4444';
+    bgColor = 'rgba(239, 68, 68, 0.08)';
+    tagBg = '#fef2f2';
+    tagText = '#b91c1c';
+    levelName = 'CRITICAL PHISHING RISK';
+    iconSvg = '🚨';
+  } else if (score >= 60) {
+    borderColor = '#f97316';
+    bgColor = 'rgba(249, 115, 22, 0.08)';
+    tagBg = '#fff7ed';
+    tagText = '#c2410c';
+    levelName = 'HIGH THREAT SUSPICION';
+    iconSvg = '⚠️';
+  } else if (score >= 30) {
+    borderColor = '#f59e0b';
+    bgColor = 'rgba(245, 158, 11, 0.08)';
+    tagBg = '#fffbeb';
+    tagText = '#b45309';
+    levelName = 'CAUTION ADVISED';
+    iconSvg = '⚡';
+  }
+
+  const div = document.createElement('div');
+  div.setAttribute('data-phishtrace-banner', '1');
+  div.style.cssText = `
+    margin: 12px 0 16px 0;
+    padding: 14px 18px;
+    border-radius: 12px;
+    border: 1px solid ${borderColor}55;
+    border-left: 6px solid ${borderColor};
+    background: ${bgColor};
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: #1e293b;
+    box-shadow: 0 4px 15px -2px rgba(0,0,0,0.06);
+    position: relative;
+  `;
+
+  let html = `
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span style="font-size: 18px;">${iconSvg}</span>
+        <b style="font-size: 14px; letter-spacing: -0.01em; color: ${tagText};">
+          PhishTrace Shield: ${levelName} (${score}/100)
+        </b>
+      </div>
+      <span style="font-size: 11px; font-weight: 700; color: #475569; background: #e2e8f0; padding: 3px 9px; border-radius: 9999px; text-transform: uppercase;">
+        ${result.source === 'backend' ? '🤖 AI Engine' : '⚡ Local Sensor'}
+      </span>
+    </div>
+  `;
+
+  // Detected Threat Reasons
+  const reasons = result.reasons || [];
+  if (reasons.length) {
+    html += `<div style="margin: 6px 0 10px 0; font-size: 12.5px; color: #334155; line-height: 1.5;">`;
+    reasons.forEach(r => {
+      const text = typeof r === 'string' ? r : (r.detail || r.message || JSON.stringify(r));
+      html += `<div style="display: flex; gap: 6px; margin: 3px 0;"><span>•</span><span>${text}</span></div>`;
+    });
+    html += `</div>`;
+  }
+
+  // Header Authentication Chips & Geo
+  const hf = result.header_forensics;
+  const geo = result.geo_data;
+  if (hf || geo) {
+    html += `<div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; font-size: 11.5px; color: #475569;">`;
+    if (hf) {
+      html += `
+        <span style="background: white; border: 1px solid #cbd5e1; padding: 2px 8px; border-radius: 6px;">
+          SPF: ${authChip(hf.spf)}
+        </span>
+        <span style="background: white; border: 1px solid #cbd5e1; padding: 2px 8px; border-radius: 6px;">
+          DKIM: ${authChip(hf.dkim)}
+        </span>
+        <span style="background: white; border: 1px solid #cbd5e1; padding: 2px 8px; border-radius: 6px;">
+          DMARC: ${authChip(hf.dmarc)}
+        </span>
+      `;
+    }
+    if (geo && geo.country) {
+      html += `
+        <span style="background: white; border: 1px solid #cbd5e1; padding: 2px 8px; border-radius: 6px;">
+          📍 Origin: <b>${geo.city || '?'}, ${geo.country}</b> ${geo.infra_type && geo.infra_type !== 'RESIDENTIAL' ? `(${geo.infra_type})` : ''}
+        </span>
+      `;
+    }
+    html += `</div>`;
+  }
+
+  // Interactive CTAs
+  html += `<div style="display: flex; gap: 10px; margin-top: 10px;">`;
+  if (result.scan_id) {
+    html += `
+      <button onclick="window.open('http://localhost:8000/dashboard/')" 
+        style="background: #0284c7; color: white; border: none; border-radius: 6px; padding: 6px 14px; font-size: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 5px; box-shadow: 0 2px 6px rgba(2,132,199,0.3);">
+        🔍 Open in SOC Radar
+      </button>
+      <button onclick="window.open('http://localhost:8000/api/scans/${result.scan_id}/report?format=pdf')" 
+        style="background: white; color: #334155; border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer;">
+        📄 Export PDF Dossier
+      </button>
+    `;
+  }
+  html += `</div>`;
+
+  div.innerHTML = html;
   return div;
 }
 
+function authChip(val) {
+  if (!val) return '<span style="color:#94a3b8">—</span>';
+  const pass = val.toLowerCase() === 'pass';
+  return `<span style="color:${pass ? '#10b981' : '#ef4444'}; font-weight: 700;">${val.toUpperCase()}</span>`;
+}
+
+// ---------- Scan Messages in Reading Pane ----------
 function scanOpenMessages() {
-  // .adn.ads is Gmail's per-message container in the reading pane; .gD holds sender email/name attrs;
-  // .hP is the subject line; .a3s.aiL is the rendered message body. These are stable-ish but Gmail's
-  // DOM is unofficial/obfuscated, so a production build should move to the Gmail API instead.
-  document.querySelectorAll(".adn.ads").forEach(msg => {
-    if (msg.getAttribute("data-phishtrace-scanned")) return;
-    const senderEl = msg.querySelector(".gD");
-    const subjectEl = document.querySelector(".hP");
-    const bodyEl = msg.querySelector(".a3s.aiL");
+  document.querySelectorAll('.adn.ads').forEach(msg => {
+    if (msg.getAttribute('data-phishtrace-scanned')) return;
+    const senderEl = msg.querySelector('.gD');
+    const subjectEl = document.querySelector('.hP');
+    const bodyEl = msg.querySelector('.a3s.aiL');
     if (!senderEl) return;
-    msg.setAttribute("data-phishtrace-scanned", "1");
+    msg.setAttribute('data-phishtrace-scanned', '1');
 
-    const senderName = senderEl.getAttribute("name") || senderEl.textContent;
-    const senderEmail = senderEl.getAttribute("email") || "";
-    const subject = subjectEl ? subjectEl.textContent : "";
-    const bodyText = bodyEl ? bodyEl.textContent.slice(0, 2000) : "";
+    const senderName = senderEl.getAttribute('name') || senderEl.textContent;
+    const senderEmail = senderEl.getAttribute('email') || '';
+    const subject = subjectEl ? subjectEl.textContent : '';
+    const bodyText = bodyEl ? bodyEl.textContent.slice(0, 3000) : '';
 
-    const result = quickScore(senderName, senderEmail, subject, bodyText);
-    const banner = makeBanner(result);
-    msg.parentElement.insertBefore(banner, msg);
-    chrome.runtime.sendMessage({ type: "phishtrace-result", score: result.score });
+    chrome.runtime.sendMessage({
+      type: 'phishtrace-analyze',
+      data: {
+        sender_name: senderName,
+        sender_email: senderEmail,
+        subject: subject,
+        body_text: bodyText
+      }
+    }, (result) => {
+      if (chrome.runtime.lastError || !result) return;
+      const banner = makeBanner(result);
+      if (msg.parentElement) {
+        msg.parentElement.insertBefore(banner, msg);
+      }
+    });
   });
 }
 
-// ---------- MODE 2: deep forensic parse of the raw "Show original" source ----------
+// ---------- Forensic Scan of Raw Source ("Show original") ----------
 function headerFrom(text, name) {
-  const re = new RegExp("^" + name + ":\\s*(.*(?:\\n[ \\t].*)*)", "im");
+  const re = new RegExp('^' + name + ':\\s*(.*(?:\\n[ \\t].*)*)', 'im');
   const m = text.match(re);
-  return m ? m[1].replace(/\n[ \t]+/g, " ").trim() : null;
+  return m ? m[1].replace(/\n[ \t]+/g, ' ').trim() : null;
 }
 function allHeadersFrom(text, name) {
-  const re = new RegExp("^" + name + ":\\s*(.*(?:\\n[ \\t].*)*)", "img");
-  return [...text.matchAll(re)].map(m => m[1].replace(/\n[ \t]+/g, " ").trim());
+  const re = new RegExp('^' + name + ':\\s*(.*(?:\\n[ \\t].*)*)', 'img');
+  return [...text.matchAll(re)].map(m => m[1].replace(/\n[ \t]+/g, ' ').trim());
 }
 
 function scanRawSource() {
-  if (document.getElementById("phishtrace-forensic-panel")) return; // already rendered
-  const text = document.body.innerText || "";
-  if (!/^Delivered-To:|^Received:|^Return-Path:/im.test(text)) return; // not a raw-source view yet
+  if (document.getElementById('phishtrace-forensic-panel')) return;
+  const text = document.body.innerText || '';
+  if (!/^Delivered-To:|^Received:|^Return-Path:/im.test(text)) return;
 
-  const from = headerFrom(text, "From"), returnPath = headerFrom(text, "Return-Path");
+  const from = headerFrom(text, 'From'), returnPath = headerFrom(text, 'Return-Path');
   const fromDom = domainOf(from), rpDom = domainOf(returnPath);
-  const auth = headerFrom(text, "Authentication-Results") || "";
+  const subject = headerFrom(text, 'Subject') || '';
+  const auth = headerFrom(text, 'Authentication-Results') || '';
   const spf = /spf=(\w+)/i.exec(auth), dkim = /dkim=(\w+)/i.exec(auth), dmarc = /dmarc=(\w+)/i.exec(auth);
-  const received = allHeadersFrom(text, "Received").reverse();
+  const received = allHeadersFrom(text, 'Received').reverse();
   const ips = received.map(r => { const m = r.match(/\[?(\d{1,3}(?:\.\d{1,3}){3})\]?/); return m ? m[1] : null; }).filter(Boolean);
-  const originIp = ips.find(ip => !ip.startsWith("192.168.") && !ip.startsWith("10.")) || ips[0];
+  const originIp = ips.find(ip => !ip.startsWith('192.168.') && !ip.startsWith('10.') && !ip.startsWith('127.')) || ips[0];
 
   let score = 0; const lines = [];
-  if (rpDom && fromDom && rpDom !== fromDom) { score += 25; lines.push(`Return-Path (${rpDom}) ≠ From domain (${fromDom}).`); }
-  [["SPF", spf], ["DKIM", dkim], ["DMARC", dmarc]].forEach(([label, m]) => {
-    if (m && m[1].toLowerCase() !== "pass") { score += 15; lines.push(`${label}: ${m[1]}.`); }
+  if (rpDom && fromDom && rpDom !== fromDom) { score += 25; lines.push(`Return-Path (${rpDom}) ≠ From domain (${fromDom})`); }
+  [['SPF', spf], ['DKIM', dkim], ['DMARC', dmarc]].forEach(([label, m]) => {
+    if (m && m[1].toLowerCase() !== 'pass') { score += 15; lines.push(`${label} Authentication: ${m[1]}`); }
   });
 
-  const panel = document.createElement("div");
-  panel.id = "phishtrace-forensic-panel";
-  panel.style.cssText = `position:sticky;top:0;z-index:9999;background:#161d27;color:#e7ecf2;
-    font:13px/1.5 -apple-system,Arial,sans-serif;padding:14px 18px;border-bottom:3px solid #4fa8e0;margin-bottom:16px`;
-  panel.innerHTML = `<b>PhishTrace forensic trace</b> — fraud signal score: <b>${Math.min(100,score)}/100</b><br>
-    From domain: <code>${fromDom || "—"}</code> · Return-Path domain: <code>${rpDom || "—"}</code><br>
-    ${lines.map(l => "• " + l).join("<br>")}<br>
-    Probable origin hop: <code>${originIp || "not found"}</code> (${ips.length} relay hop(s) detected)`;
+  const panel = document.createElement('div');
+  panel.id = 'phishtrace-forensic-panel';
+  panel.style.cssText = `
+    position: sticky; top: 0; z-index: 9999;
+    background: #090d16; color: #f1f5f9;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    padding: 16px 24px; border-bottom: 3px solid #38bdf8;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.6); margin-bottom: 20px;
+  `;
+
+  panel.innerHTML = `
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span style="font-size:20px;">🔬</span>
+        <b style="font-size: 15px; color: #38bdf8; letter-spacing: -0.01em;">PhishTrace Forensic Header Deconstruction</b>
+      </div>
+      <span style="font-size: 11px; background: rgba(56,189,248,0.15); color: #38bdf8; padding: 3px 10px; border-radius: 9999px; font-weight: 700; border: 1px solid rgba(56,189,248,0.3);">
+        THREAT INDEX: ${Math.min(100, score)}/100
+      </span>
+    </div>
+    <div style="font-size: 13px; color: #94a3b8; line-height: 1.6;">
+      From Domain: <code style="color: #f8fafc; background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 4px;">${fromDom || '—'}</code> · 
+      Return-Path: <code style="color: #f8fafc; background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 4px;">${rpDom || '—'}</code><br>
+      Probable Relay Origin IP: <code style="color: #38bdf8; background: rgba(56,189,248,0.1); padding: 2px 6px; border-radius: 4px;">${originIp || 'Not found'}</code> 
+      (${ips.length} relay hops traversed)
+      ${lines.length ? `<div style="margin-top:6px; color:#fca5a5;">${lines.map(l => '• ' + l).join('<br>')}</div>` : ''}
+    </div>
+  `;
+
   document.body.insertBefore(panel, document.body.firstChild);
 }
 
-// ---------- driver ----------
+// ---------- Driver ----------
 function tick() {
   chrome.storage.local.get({ enabled: true }, (s) => {
     if (!s.enabled) return;
-    if (location.href.includes("view=om")) scanRawSource();
+    if (location.href.includes('view=om')) scanRawSource();
     else scanOpenMessages();
   });
 }
+
 const observer = new MutationObserver(() => {
   clearTimeout(window.__phishtraceT);
   window.__phishtraceT = setTimeout(tick, 400);

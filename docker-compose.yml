@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  phishtrace-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: phishtrace-soc-engine
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:///./phishtrace.db
+      - CORS_ORIGINS=*
+    volumes:
+      - phishtrace-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  phishtrace-data:
