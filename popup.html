@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<style>
+body{width:230px;font-family:-apple-system,Arial,sans-serif;background:#10151c;color:#e7ecf2;padding:14px;margin:0}
+h1{font-size:14px;margin:0 0 10px}
+.row{display:flex;justify-content:space-between;padding:6px 0;font-size:13px;border-bottom:1px solid #2a3644}
+.toggle{display:flex;align-items:center;justify-content:space-between;margin-top:12px}
+button{background:#1c2531;color:#e7ecf2;border:1px solid #2a3644;border-radius:5px;padding:6px 10px;cursor:pointer;font-size:12px}
+</style></head>
+<body>
+  <h1>PhishTrace</h1>
+  <div class="row"><span>Emails scanned</span><b id="scanned">0</b></div>
+  <div class="row"><span>Flagged suspicious</span><b id="flagged">0</b></div>
+  <div class="toggle"><span>Auto-scan Gmail</span><button id="toggle">On</button></div>
+  <script src="popup.js"></script>
+</body></html>
